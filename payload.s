@@ -7,8 +7,7 @@
 .global payload_end_addr
 
 payload_start_addr:
-.incbin "hello.booty"
-;.incbin "boot no_uartpassthru.bin"
+.incbin "unirom.booty"
 
 payload_end_addr:
 
