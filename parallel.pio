@@ -5,26 +5,25 @@
 
 
 .program parallel
-mov x, ~null             ; pre-load x with all ones, so data returns 0xff if data is empty
+.side_set 3 opt pindirs
+mov x, ~null             ; pre-load x with all ones, so data returns 0xff if FIFO is empty
 wait 1 GPIO GPIO_RESET   ; wait for reset to go high
 
 .wrap_target
-disableOutput:
-    mov osr, null        ; clear OSR
-    out pindirs, 8       ; OSR to pindirs, disable output
+;disableOutput:
+    set pindirs, 0b00000 side 0b000 ; Set 8 data pins to input
 
 idle:
-    wait 0 GPIO GPIO_CS  ; wait for CS to go low
-    jmp pin idle         ; jump to idle if RD is high
-    
-enableOutput:
-    mov osr, ~null       ; set OSR to all ones
-    out pindirs, 8       ; set pins to output
+    wait 0 GPIO GPIO_CS             ; wait for CS to go low
+    jmp pin idle                    ; jump to idle if RD is high
 
-dataOut:
-    pull noblock         ; pull data from FIFO
-    out pins, 8          ; output data to pins
+;pullData:
+    pull noblock                    ; pull data from FIFO
+    out pins, 8                     ; pre-load data to pins
 
-outputStall:
-    wait 1 GPIO GPIO_RD  ; wait for RD to return high
+;enableOutput:
+    set pindirs, 0b11111 side 0b111 ; set 8 data pins to output
+
+;outputWait:
+    wait 1 GPIO GPIO_RD             ; wait for RD to return high
 .wrap

@@ -78,19 +78,23 @@ void initParallelProgram(PIO pio, uint8_t sm, uint8_t offset)
     // Data
     pio_sm_set_consecutive_pindirs(pio, sm, Pin::D0, 8, false);
     sm_config_set_out_pins(&sm_config, Pin::D0, 8);
+    sm_config_set_set_pins(&sm_config, Pin::D0, 5); // Set pin D0 to D5 for the set(pindirs) instruction
     for (uint pin = Pin::D0; pin < Pin::D0 + 8; pin++)
     {
         pio_gpio_init(pio, pin);
         gpio_set_slew_rate(pin, GPIO_SLEW_RATE_FAST);
         gpio_set_drive_strength(pin, GPIO_DRIVE_STRENGTH_4MA);
     }
+    sm_config_set_sideset(&sm_config, 3 + 1, true, true); // 3 bits sideset + 1 bit for SIDE_EN(optional sideset)
+    sm_config_set_sideset_pin_base(&sm_config, Pin::D5);  // Set the base pin for the sideset
 
     pio_sm_init(pio, sm, offset, &sm_config);
 }
 
 int main()
 {
-    set_sys_clock_khz(250000, true); // Set clock to 250MHz, rp2040 is not fast enough at 133MHz
+    // Disabled for now, re-enable if payload fails to load
+    // set_sys_clock_khz(250000, true); // Set clock to 250MHz
 
     // Initialize stdio for debugging
     stdio_init_all();
