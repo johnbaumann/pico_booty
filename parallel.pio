@@ -1,0 +1,30 @@
+.define GPIO_DATABASE 0
+.define GPIO_CS 8
+.define GPIO_RD 9
+.define GPIO_RESET 10
+
+
+.program parallel
+mov x, ~null             ; pre-load x with all ones, so data returns 0xff if data is empty
+wait 1 GPIO GPIO_RESET   ; wait for reset to go high
+
+.wrap_target
+disableOutput:
+    mov osr, null        ; clear OSR
+    out pindirs, 8       ; OSR to pindirs, disable output
+
+idle:
+    wait 0 GPIO GPIO_CS  ; wait for CS to go low
+    jmp pin idle         ; jump to idle if RD is high
+    
+enableOutput:
+    mov osr, ~null       ; set OSR to all ones
+    out pindirs, 8       ; set pins to output
+
+dataOut:
+    pull noblock         ; pull data from FIFO
+    out pins, 8          ; output data to pins
+
+outputStall:
+    wait 1 GPIO GPIO_RD  ; wait for RD to return high
+.wrap
