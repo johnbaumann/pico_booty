@@ -71,7 +71,7 @@ target_link_libraries(pico_booty
         hardware_pio
         )
 
-pico_set_binary_type(pico_booty copy_to_ram)
+#pico_set_binary_type(pico_booty copy_to_ram)
 
 pico_add_extra_outputs(pico_booty)
 
