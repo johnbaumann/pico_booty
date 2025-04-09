@@ -6,12 +6,9 @@
 #include "hardware/dma.h"
 #include "hardware/pio.h"
 #include "pico/stdlib.h"
+#include "pico/time.h"
 
 #include "parallel.pio.h"
-
-extern const uint8_t payload_start_addr, payload_end_addr;
-const uint8_t *payload = &payload_start_addr;
-const int payload_size = &payload_end_addr - &payload_start_addr;
 
 namespace Pin
 {
@@ -41,8 +38,16 @@ namespace SM
     constexpr unsigned int c_smParallelOut = 0;
 } // namespace SM
 
+extern const uint8_t payload_start_addr, payload_end_addr;
+const uint8_t *payload = &payload_start_addr;
+const int payload_size = &payload_end_addr - &payload_start_addr;
+
+bool resetPending = false;
+uint64_t lastLowEvent = 0;
+
 int initDMA();
 void initParallelProgram(PIO pio, uint8_t sm, uint8_t offset);
+void resetCallback(uint gpio, uint32_t events);
 
 int initDMA(const volatile void *read_addr, unsigned int transfer_count)
 {
@@ -91,6 +96,36 @@ void initParallelProgram(PIO pio, uint8_t sm, uint8_t offset)
     pio_sm_init(pio, sm, offset, &sm_config);
 }
 
+void resetCallback(uint gpio, uint32_t events)
+{
+    // resetPending = true;
+    if (events & GPIO_IRQ_LEVEL_LOW)
+    {
+        lastLowEvent = time_us_32();
+        // Disable low signal edge detection
+        gpio_set_irq_enabled(Pin::RESET, GPIO_IRQ_LEVEL_LOW, false);
+        // Enable high signal edge detection
+        gpio_set_irq_enabled(Pin::RESET, GPIO_IRQ_LEVEL_HIGH, true);
+    }
+    else if (events & GPIO_IRQ_LEVEL_HIGH)
+    {
+        // Disable the rising edge detection
+        gpio_set_irq_enabled(Pin::RESET, GPIO_IRQ_LEVEL_HIGH, false);
+
+        const uint32_t now = time_us_32();
+        const uint32_t timeElapsed = now - lastLowEvent;
+        if (timeElapsed >= 500U) // Debounce, only reset if the pin was low for more than 500us(.5 ms)
+        {
+            resetPending = true;
+        }
+        else
+        {
+            // Enable the low signal edge detection again
+            gpio_set_irq_enabled(Pin::RESET, GPIO_IRQ_LEVEL_LOW, true);
+        }
+    }
+}
+
 int main()
 {
     // Disabled for now, re-enable if payload fails to load
@@ -102,29 +137,55 @@ int main()
     // Initialize reset pin
     gpio_init(Pin::RESET);
     gpio_set_dir(Pin::RESET, GPIO_IN);
-    gpio_set_input_hysteresis_enabled(Pin::RESET, true);
 
     initParallelProgram(PIOInstance::c_pioParallelOut, SM::c_smParallelOut, pio_add_program(PIOInstance::c_pioParallelOut, &parallel_program));
 
-    int dmaChannel = initDMA(payload, payload_size);
-    if (dmaChannel < 0)
-    {
-        printf("Failed to initialize DMA\n");
-        return 1;
-    }
-    printf("DMA channel %d initialized\n", dmaChannel);
-
-    // Reset the console and start the payload out program
-    gpio_set_dir(Pin::RESET, GPIO_OUT);
-    gpio_put(Pin::RESET, 0);
-
-    pio_sm_set_enabled(PIOInstance::c_pioParallelOut, SM::c_smParallelOut, true);
-
-    sleep_ms(250); // Wait a bit for the console to reset
-    gpio_set_dir(Pin::RESET, GPIO_IN);
-
     while (true)
     {
-        sleep_ms(100); // Nothing to do
+        int dmaChannel = initDMA(payload, payload_size);
+        if (dmaChannel < 0)
+        {
+            printf("Failed to initialize DMA\n");
+            return 1;
+        }
+
+        // Reset the console and start the payload out program
+        gpio_set_dir(Pin::RESET, GPIO_OUT);
+        gpio_put(Pin::RESET, 0);
+
+        pio_sm_set_enabled(PIOInstance::c_pioParallelOut, SM::c_smParallelOut, true);
+        sleep_ms(250); // Wait a bit for the console to reset
+        gpio_set_dir(Pin::RESET, GPIO_IN);
+
+        while (gpio_get(Pin::RESET) == 0)
+        {
+            sleep_ms(1); // Wait for the reset pin to go high
+        }
+
+        // Enable an irq handler for the reset pin, only need to set the callback once
+        gpio_set_irq_enabled_with_callback(Pin::RESET, GPIO_IRQ_LEVEL_LOW, true, &resetCallback);
+
+        while (!resetPending)
+        {
+            sleep_ms(1); // Nothing to do
+        }
+
+        // Both irq events are disabled now per the callback logic
+
+        while (gpio_get(Pin::RESET) == 0)
+        {
+            sleep_ms(1); // Wait for the reset pin to go high
+        }
+
+        printf("Resetting...\n");
+        resetPending = false;
+
+        // Reset DMA and the PIO state machine
+        dma_channel_abort(dmaChannel);
+        dma_channel_unclaim(dmaChannel);
+        pio_sm_set_enabled(PIOInstance::c_pioParallelOut, SM::c_smParallelOut, false);
+        pio_sm_clear_fifos(PIOInstance::c_pioParallelOut, SM::c_smParallelOut);
+        pio_sm_restart(PIOInstance::c_pioParallelOut, SM::c_smParallelOut);
+        pio_sm_set_enabled(PIOInstance::c_pioParallelOut, SM::c_smParallelOut, true);
     }
 }

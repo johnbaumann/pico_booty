@@ -24,5 +24,5 @@ You can create a payload using [ps1-packer](https://github.com/grumpycoders/pcsx
 Compiled using the [Raspberry Pi Pico extension for VS Code](https://marketplace.visualstudio.com/items?itemName=raspberry-pi.raspberry-pi-pico), SDK V2.1.1
 
 ## To-do
-Next steps would be to monitor reset and re-run the payload if the console is restarted.
+~~Next steps would be to monitor reset and re-run the payload if the console is restarted.~~ Reset detection complete
 Additional functionality could be added for uploading payloads over usb.
