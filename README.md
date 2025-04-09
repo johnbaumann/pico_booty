@@ -18,7 +18,7 @@ This project is built on the work of Nicolas "Pixel" Noble who came up with the 
 | 10 | RESET |
 
 ## Creating a payload
-You can create a payload using [ps1-packer](https://github.com/grumpycoders/pcsx-redux/tree/main/tools/ps1-packer). A pre-compiled version of this tool is included in releases of [PCSX-Redux](https://github.com/grumpycoders/pcsx-redux).
+You can create a payload using [ps1-packer](https://github.com/grumpycoders/pcsx-redux/tree/main/tools/ps1-packer). A pre-compiled version of this tool is included in releases of [PCSX-Redux](https://github.com/grumpycoders/pcsx-redux?tab=readme-ov-file#where).
 
 ## Compiling
 Compiled using the [Raspberry Pi Pico extension for VS Code](https://marketplace.visualstudio.com/items?itemName=raspberry-pi.raspberry-pi-pico), SDK V2.1.1
