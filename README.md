@@ -1,6 +1,6 @@
 # Pico booty
 A barebones implementation of "booty" for PS1 using an rp2040. Booty uses a specially crafted stream of bytes to load and run a payload in place of an external rom(pio cheat cart), using a minimal interface: 8 data pins, chip select, read, and reset.
-This project is built on the work of Nicolas "Pixel" Noble who came up with the Booty concept, and danhans42 who's previous work on booty was used a reference for designing my implementation here.
+This project is built on the work of Nicolas "Pixel" Noble who came up with the Booty concept, and danhans42 who's previous work on booty was used as a reference for designing my implementation here.
 
 ## Pins
 | Pico GPIO # | PS1 |

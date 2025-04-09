@@ -38,62 +38,63 @@ namespace SM
     constexpr unsigned int c_smParallelOut = 0;
 } // namespace SM
 
-extern const uint8_t payload_start_addr, payload_end_addr;
-const uint8_t *payload = &payload_start_addr;
-const int payload_size = &payload_end_addr - &payload_start_addr;
+extern const uint8_t c_payloadStart, c_payloadEnd;
 
 bool resetPending = false;
-uint64_t lastLowEvent = 0;
+uint32_t lastLowEvent = 0;
 
 int initDMA();
-void initParallelProgram(PIO pio, uint8_t sm, uint8_t offset);
+void initParallelProgram(const PIO pio, const uint8_t sm, const uint8_t offset);
 void resetCallback(uint gpio, uint32_t events);
 
-int initDMA(const volatile void *read_addr, unsigned int transfer_count)
+int initDMA(const volatile void *read_addr, const unsigned int transfer_count)
 {
     int channel = dma_claim_unused_channel(true);
-    dma_channel_config c = dma_channel_get_default_config(channel);
+    dma_channel_config dmaConfig = dma_channel_get_default_config(channel);
 
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_read_increment(&dmaConfig, true);
+    channel_config_set_write_increment(&dmaConfig, false);
+    channel_config_set_transfer_data_size(&dmaConfig, DMA_SIZE_8);
 
     const unsigned int parallelDREQ = PIOInstance::c_pioParallelOut == pio0 ? DREQ_PIO0_TX0 : DREQ_PIO1_TX0;
-    channel_config_set_dreq(&c, parallelDREQ);
+    channel_config_set_dreq(&dmaConfig, parallelDREQ);
 
-    dma_channel_configure(channel, &c, &PIOInstance::c_pioParallelOut->txf[SM::c_smParallelOut], read_addr, transfer_count, true);
+    dma_channel_configure(channel, &dmaConfig, &PIOInstance::c_pioParallelOut->txf[SM::c_smParallelOut], read_addr, transfer_count, true);
 
     return channel;
 }
 
-void initParallelProgram(PIO pio, uint8_t sm, uint8_t offset)
+void initParallelProgram(const PIO pio, const uint8_t sm, const uint8_t offset)
 {
-    pio_sm_config sm_config = parallel_program_get_default_config(offset);
+    pio_sm_config smConfig = parallel_program_get_default_config(offset);
 
-    sm_config_set_out_shift(&sm_config, false, false, 8);  // 8 bits out, no autopull
-    sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX); // We don't need TX, so we can join it to RX for more space
+    // FIFO config
+    sm_config_set_out_shift(&smConfig, false, false, 8);  // 8 bits out, no autopull
+    sm_config_set_fifo_join(&smConfig, PIO_FIFO_JOIN_TX); // We don't need TX, so we can join it to RX for more space
 
     // CS + RD
     pio_gpio_init(pio, Pin::CS);
     pio_gpio_init(pio, Pin::RD);
     gpio_set_input_enabled(Pin::CS, true);
     gpio_set_input_enabled(Pin::RD, true);
-    sm_config_set_jmp_pin(&sm_config, Pin::RD);
+    sm_config_set_jmp_pin(&smConfig, Pin::RD);
 
     // Data
     pio_sm_set_consecutive_pindirs(pio, sm, Pin::D0, 8, false);
-    sm_config_set_out_pins(&sm_config, Pin::D0, 8);
-    sm_config_set_set_pins(&sm_config, Pin::D0, 5); // Set pin D0 to D5 for the set(pindirs) instruction
+    sm_config_set_out_pins(&smConfig, Pin::D0, 8); // Set pins D0-D7 for the out(pins) instruction
+    sm_config_set_set_pins(&smConfig, Pin::D0, 5); // Set pin D0 to D5 for the set(pindirs) instruction
     for (uint pin = Pin::D0; pin < Pin::D0 + 8; pin++)
     {
         pio_gpio_init(pio, pin);
         gpio_set_slew_rate(pin, GPIO_SLEW_RATE_FAST);
         gpio_set_drive_strength(pin, GPIO_DRIVE_STRENGTH_4MA);
     }
-    sm_config_set_sideset(&sm_config, 3 + 1, true, true); // 3 bits sideset + 1 bit for SIDE_EN(optional sideset)
-    sm_config_set_sideset_pin_base(&sm_config, Pin::D5);  // Set the base pin for the sideset
+    // Sideset config, for controlling bits 5-7 of the data pins
+    sm_config_set_sideset(&smConfig, 3 + 1, true, true); // 3 bits sideset + 1 bit for SIDE_EN(optional sideset)
+    sm_config_set_sideset_pin_base(&smConfig, Pin::D5);  // Set the base pin for the sideset to D5
 
-    pio_sm_init(pio, sm, offset, &sm_config);
+    // Push the config to the PIO state machine
+    pio_sm_init(pio, sm, offset, &smConfig);
 }
 
 void resetCallback(uint gpio, uint32_t events)
@@ -112,9 +113,9 @@ void resetCallback(uint gpio, uint32_t events)
         // Disable the rising edge detection
         gpio_set_irq_enabled(Pin::RESET, GPIO_IRQ_LEVEL_HIGH, false);
 
-        const uint32_t now = time_us_32();
-        const uint32_t timeElapsed = now - lastLowEvent;
-        if (timeElapsed >= 500U) // Debounce, only reset if the pin was low for more than 500us(.5 ms)
+        const uint32_t c_now = time_us_32();
+        const uint32_t c_timeElapsed = c_now - lastLowEvent;
+        if (c_timeElapsed >= 500U) // Debounce, only reset if the pin was low for more than 500us(.5 ms)
         {
             resetPending = true;
         }
@@ -128,6 +129,9 @@ void resetCallback(uint gpio, uint32_t events)
 
 int main()
 {
+    const uint8_t *const c_payload = &c_payloadStart;
+    const int c_payloadSize = &c_payloadEnd - &c_payloadStart;
+
     // Disabled for now, re-enable if payload fails to load
     // set_sys_clock_khz(250000, true); // Set clock to 250MHz
 
@@ -142,7 +146,7 @@ int main()
 
     while (true)
     {
-        int dmaChannel = initDMA(payload, payload_size);
+        int dmaChannel = initDMA(c_payload, c_payloadSize);
         if (dmaChannel < 0)
         {
             printf("Failed to initialize DMA\n");

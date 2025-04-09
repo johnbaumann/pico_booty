@@ -3,11 +3,11 @@
 
 .data
 
-.global payload_start_addr
-.global payload_end_addr
+.global c_payloadStart
+.global c_payloadEnd
 
-payload_start_addr:
+c_payloadStart:
 .incbin "unirom.booty"
 
-payload_end_addr:
+c_payloadEnd:
 
